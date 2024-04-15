@@ -309,24 +309,32 @@ func (o *BuiltInAuthenticationOptions) validateRequestHeaderOptions() []error {
 }
 
 func (o *BuiltInAuthenticationOptions) validateCertificateOverlap() []error {
-	var allErrors []error
-	if o.RequestHeader != nil && o.ClientCert != nil {
-		clientCA := strings.TrimSpace(o.ClientCert.ClientCA)
-		requestHeaderClientCA := strings.TrimSpace(o.RequestHeader.ClientCAFile)
-		if clientCA != "" && clientCA == requestHeaderClientCA {
-			numValidNames := 0
-			for _, allowedName := range o.RequestHeader.AllowedNames {
-				if len(strings.TrimSpace(allowedName)) != 0 {
-					numValidNames++
-				}
-			}
-			if numValidNames == 0 {
-				errMsg := fmt.Errorf("when 'requestheader-client-ca-file' and 'client-ca-file' are the same, 'requestheader-allowed-names' must be specified")
-				allErrors = append(allErrors, errMsg)
-			}
+	if o.RequestHeader == nil || o.ClientCert == nil {
+		return nil
+	}
+
+	clientCA := strings.TrimSpace(o.ClientCert.ClientCA)
+	requestHeaderClientCA := strings.TrimSpace(o.RequestHeader.ClientCAFile)
+	if clientCA == "" || clientCA != requestHeaderClientCA {
+		return nil // No overlap issue if empty or different CAs
+	}
+
+	if hasNonEmptyAllowedNames(o.RequestHeader.AllowedNames) {
+		return nil // No error if there are valid names
+	}
+
+	errMsg := fmt.Errorf("when 'requestheader-client-ca-file' and 'client-ca-file' are the same, 'requestheader-allowed-names' must be specified")
+	return []error{errMsg}
+}
+
+// hasNonEmptyAllowedNames checks if there is at least one non-empty allowed name.
+func hasNonEmptyAllowedNames(names []string) bool {
+	for _, name := range names {
+		if strings.TrimSpace(name) != "" {
+			return true
 		}
 	}
-	return allErrors
+	return false
 }
 
 // AddFlags returns flags of authentication for a API Server
