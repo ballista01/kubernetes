@@ -231,6 +231,15 @@ func (o *BuiltInAuthenticationOptions) validateServiceAccountOptions() []error {
 		return allErrors
 	}
 
+	allErrors = append(allErrors, o.validateServiceAccountIssuers()...)
+	allErrors = append(allErrors, o.validateServiceAccountKeys()...)
+	allErrors = append(allErrors, o.validateJWKSURI()...)
+
+	return allErrors
+}
+
+func (o *BuiltInAuthenticationOptions) validateServiceAccountIssuers() []error {
+	var allErrors []error
 	seen := make(map[string]bool)
 	for _, issuer := range o.ServiceAccounts.Issuers {
 		if strings.Contains(issuer, ":") {
@@ -249,14 +258,22 @@ func (o *BuiltInAuthenticationOptions) validateServiceAccountOptions() []error {
 		}
 		seen[issuer] = true
 	}
-
 	if len(o.ServiceAccounts.Issuers) == 0 {
 		allErrors = append(allErrors, errors.New("service-account-issuer is a required flag"))
 	}
+	return allErrors
+}
+
+func (o *BuiltInAuthenticationOptions) validateServiceAccountKeys() []error {
+	var allErrors []error
 	if len(o.ServiceAccounts.KeyFiles) == 0 {
 		allErrors = append(allErrors, errors.New("service-account-key-file is a required flag"))
 	}
+	return allErrors
+}
 
+func (o *BuiltInAuthenticationOptions) validateJWKSURI() []error {
+	var allErrors []error
 	// Validate the JWKS URI when it is explicitly set.
 	// When unset, it is later derived from ExternalHost.
 	if o.ServiceAccounts.JWKSURI != "" {
@@ -266,7 +283,6 @@ func (o *BuiltInAuthenticationOptions) validateServiceAccountOptions() []error {
 			allErrors = append(allErrors, fmt.Errorf("service-account-jwks-uri requires https scheme, parsed as: %v", u.String()))
 		}
 	}
-
 	return allErrors
 }
 
