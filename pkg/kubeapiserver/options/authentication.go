@@ -217,61 +217,78 @@ func (o *BuiltInAuthenticationOptions) Validate() []error {
 	}
 
 	var allErrors []error
-
 	allErrors = append(allErrors, o.validateOIDCOptions()...)
+	allErrors = append(allErrors, o.validateServiceAccountOptions()...)
+	allErrors = append(allErrors, o.validateWebHookOptions()...)
+	allErrors = append(allErrors, o.validateRequestHeaderOptions()...)
 
-	if o.ServiceAccounts != nil && len(o.ServiceAccounts.Issuers) > 0 {
-		seen := make(map[string]bool)
-		for _, issuer := range o.ServiceAccounts.Issuers {
-			if strings.Contains(issuer, ":") {
-				if _, err := url.Parse(issuer); err != nil {
-					allErrors = append(allErrors, fmt.Errorf("service-account-issuer %q contained a ':' but was not a valid URL: %v", issuer, err))
-					continue
-				}
-			}
-			if issuer == "" {
-				allErrors = append(allErrors, fmt.Errorf("service-account-issuer should not be an empty string"))
+	return allErrors
+}
+
+func (o *BuiltInAuthenticationOptions) validateServiceAccountOptions() []error {
+	var allErrors []error
+	if o.ServiceAccounts == nil {
+		return allErrors
+	}
+
+	seen := make(map[string]bool)
+	for _, issuer := range o.ServiceAccounts.Issuers {
+		if strings.Contains(issuer, ":") {
+			if _, err := url.Parse(issuer); err != nil {
+				allErrors = append(allErrors, fmt.Errorf("service-account-issuer %q contained a ':' but was not a valid URL: %v", issuer, err))
 				continue
 			}
-			if seen[issuer] {
-				allErrors = append(allErrors, fmt.Errorf("service-account-issuer %q is already specified", issuer))
-				continue
-			}
-			seen[issuer] = true
 		}
+		if issuer == "" {
+			allErrors = append(allErrors, fmt.Errorf("service-account-issuer should not be an empty string"))
+			continue
+		}
+		if seen[issuer] {
+			allErrors = append(allErrors, fmt.Errorf("service-account-issuer %q is already specified", issuer))
+			continue
+		}
+		seen[issuer] = true
 	}
 
-	if o.ServiceAccounts != nil {
-		if len(o.ServiceAccounts.Issuers) == 0 {
-			allErrors = append(allErrors, errors.New("service-account-issuer is a required flag"))
-		}
-		if len(o.ServiceAccounts.KeyFiles) == 0 {
-			allErrors = append(allErrors, errors.New("service-account-key-file is a required flag"))
-		}
-
-		// Validate the JWKS URI when it is explicitly set.
-		// When unset, it is later derived from ExternalHost.
-		if o.ServiceAccounts.JWKSURI != "" {
-			if u, err := url.Parse(o.ServiceAccounts.JWKSURI); err != nil {
-				allErrors = append(allErrors, fmt.Errorf("service-account-jwks-uri must be a valid URL: %v", err))
-			} else if u.Scheme != "https" {
-				allErrors = append(allErrors, fmt.Errorf("service-account-jwks-uri requires https scheme, parsed as: %v", u.String()))
-			}
-		}
+	if len(o.ServiceAccounts.Issuers) == 0 {
+		allErrors = append(allErrors, errors.New("service-account-issuer is a required flag"))
+	}
+	if len(o.ServiceAccounts.KeyFiles) == 0 {
+		allErrors = append(allErrors, errors.New("service-account-key-file is a required flag"))
 	}
 
-	if o.WebHook != nil {
-		retryBackoff := o.WebHook.RetryBackoff
-		if retryBackoff != nil && retryBackoff.Steps <= 0 {
-			allErrors = append(allErrors, fmt.Errorf("number of webhook retry attempts must be greater than 0, but is: %d", retryBackoff.Steps))
+	// Validate the JWKS URI when it is explicitly set.
+	// When unset, it is later derived from ExternalHost.
+	if o.ServiceAccounts.JWKSURI != "" {
+		if u, err := url.Parse(o.ServiceAccounts.JWKSURI); err != nil {
+			allErrors = append(allErrors, fmt.Errorf("service-account-jwks-uri must be a valid URL: %v", err))
+		} else if u.Scheme != "https" {
+			allErrors = append(allErrors, fmt.Errorf("service-account-jwks-uri requires https scheme, parsed as: %v", u.String()))
 		}
-	}
-
-	if o.RequestHeader != nil {
-		allErrors = append(allErrors, o.RequestHeader.Validate()...)
 	}
 
 	return allErrors
+}
+
+func (o *BuiltInAuthenticationOptions) validateWebHookOptions() []error {
+	var allErrors []error
+	if o.WebHook == nil {
+		return allErrors
+	}
+
+	retryBackoff := o.WebHook.RetryBackoff
+	if retryBackoff != nil && retryBackoff.Steps <= 0 {
+		allErrors = append(allErrors, fmt.Errorf("number of webhook retry attempts must be greater than 0, but is: %d", retryBackoff.Steps))
+	}
+
+	return allErrors
+}
+
+func (o *BuiltInAuthenticationOptions) validateRequestHeaderOptions() []error {
+	if o.RequestHeader == nil {
+		return nil
+	}
+	return o.RequestHeader.Validate()
 }
 
 // AddFlags returns flags of authentication for a API Server
