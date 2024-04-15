@@ -221,6 +221,7 @@ func (o *BuiltInAuthenticationOptions) Validate() []error {
 	allErrors = append(allErrors, o.validateServiceAccountOptions()...)
 	allErrors = append(allErrors, o.validateWebHookOptions()...)
 	allErrors = append(allErrors, o.validateRequestHeaderOptions()...)
+	allErrors = append(allErrors, o.validateCertificateOverlap()...)
 
 	return allErrors
 }
@@ -305,6 +306,27 @@ func (o *BuiltInAuthenticationOptions) validateRequestHeaderOptions() []error {
 		return nil
 	}
 	return o.RequestHeader.Validate()
+}
+
+func (o *BuiltInAuthenticationOptions) validateCertificateOverlap() []error {
+	var allErrors []error
+	if o.RequestHeader != nil && o.ClientCert != nil {
+		clientCA := strings.TrimSpace(o.ClientCert.ClientCA)
+		requestHeaderClientCA := strings.TrimSpace(o.RequestHeader.ClientCAFile)
+		if clientCA != "" && clientCA == requestHeaderClientCA {
+			numValidNames := 0
+			for _, allowedName := range o.RequestHeader.AllowedNames {
+				if len(strings.TrimSpace(allowedName)) != 0 {
+					numValidNames++
+				}
+			}
+			if numValidNames == 0 {
+				errMsg := fmt.Errorf("when 'requestheader-client-ca-file' and 'client-ca-file' are the same, 'requestheader-allowed-names' must be specified")
+				allErrors = append(allErrors, errMsg)
+			}
+		}
+	}
+	return allErrors
 }
 
 // AddFlags returns flags of authentication for a API Server
